@@ -5,15 +5,115 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trading Bot Dashboard</title>
     <style>
-        body { font-family: sans-serif; margin: 20px; }
-        .card { border: 1px solid #ccc; padding: 15px; margin-bottom: 10px; border-radius: 5px; }
+        body { font-family: sans-serif; background: #f4f4f9; margin: 0; padding: 20px; }
+        h1, h2 { color: #333; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; margin-top: 20px; }
+        .card { background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .card h3 { margin-top: 0; }
+        .controls { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+        .btn { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; color: white; }
+        .btn-green { background: #28a745; }
+        .btn-red { background: #dc3545; }
+        .btn-blue { background: #007bff; }
+        .stat-box { display: flex; justify-content: space-between; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        input[type="number"] { width: 60px; padding: 5px; }
     </style>
 </head>
 <body>
-    <h1>Trading Bot Dashboard</h1>
-    <div class="card">
-        <h2>System Status</h2>
-        <p>Bot is running.</p>
+    <script>
+        if (!localStorage.getItem('auth')) {
+            window.location.href = '/login';
+        }
+        function logout() {
+            localStorage.removeItem('auth');
+            window.location.href = '/login';
+        }
+    </script>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h1>Trading Bot Dashboard</h1>
+        <button class="btn btn-red" onclick="logout()">Logout</button>
     </div>
+
+    <div class="stat-box">
+        <div>
+            <h2>Status: <span id="bot-status">Loading...</span></h2>
+            <button id="toggle-bot" class="btn btn-blue" onclick="toggleBot()">Toggle Bot</button>
+            <p>Last Scan: <span id="last-scan">N/A</span></p>
+        </div>
+        <div style="text-align: right;">
+            <h2>Portfolio Balance: <span id="balance">0</span> RUB</h2>
+            <h3 style="color:#28a745;">Total Profit: <span id="profit">0</span> RUB</h3>
+        </div>
+    </div>
+
+    <h2>Selected Top 20 Assets</h2>
+    <div class="grid" id="assets-grid">
+        <!-- Cards will be populated here -->
+    </div>
+
+    <script>
+        async function fetchStatus() {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            
+            document.getElementById('bot-status').innerText = data.is_running ? 'Running' : 'Stopped';
+            document.getElementById('bot-status').style.color = data.is_running ? '#28a745' : '#dc3545';
+            document.getElementById('last-scan').innerText = data.last_scan_time || 'N/A';
+            document.getElementById('balance').innerText = data.portfolio.balance.toFixed(2);
+            document.getElementById('profit').innerText = data.portfolio.total_profit.toFixed(2);
+
+            const grid = document.getElementById('assets-grid');
+            grid.innerHTML = '';
+            
+            if (data.assets.length === 0) {
+                grid.innerHTML = '<p>No assets selected yet. Awaiting next scan...</p>';
+            }
+
+            data.assets.forEach(asset => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <h3>${asset.name} (${asset.ticker})</h3>
+                    <p>Best Strategy: <strong>${asset.best_strategy}</strong></p>
+                    <p>Expected Annual Return: <strong>${(asset.expected_return * 100).toFixed(2)}%</strong></p>
+                    <p>Current Price: ${asset.current_price.toFixed(2)} RUB</p>
+                    <p>Lot Price (x${asset.lot}): ${asset.lot_price.toFixed(2)} RUB</p>
+                    <div class="controls">
+                        <label>Lots: 
+                            <input type="number" min="1" value="${asset.lot || 1}" 
+                                   onchange="updateAsset('${asset.ticker}', 'lot', this.value)">
+                        </label>
+                        <button class="btn ${asset.active ? 'btn-red' : 'btn-green'}" 
+                                onclick="updateAsset('${asset.ticker}', 'active', ${!asset.active})">
+                            ${asset.active ? 'Deactivate' : 'Activate'}
+                        </button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        async function toggleBot() {
+            await fetch('/api/toggle_bot', { method: 'POST' });
+            fetchStatus();
+        }
+
+        async function updateAsset(ticker, field, value) {
+            let payload = { ticker: ticker };
+            if (field === 'lot') payload.lot = parseInt(value);
+            if (field === 'active') payload.active = value;
+
+            await fetch('/api/update_asset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            fetchStatus();
+        }
+
+        // Fetch status on load and every 10 seconds
+        fetchStatus();
+        setInterval(fetchStatus, 10000);
+    </script>
 </body>
 </html>
