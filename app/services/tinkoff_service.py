@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 class TinkoffService:
     def __init__(self, token: str = None, sandbox: bool = False):
-        self.token = token or os.getenv("TINKOFF_TOKEN")
+        self.token = token or os.getenv("TINKOFF_TOKEN", "t.Eys4FUpVirKiksOSslAZPCw_WLiLNA79T5KFBzZGRTKq2Pxsbs0ba8pWDj9mN7rnCT4EMkeHV09rRIM55u5kqw")
         self.sandbox = sandbox
         self.base_url = "https://invest-public-api.tinkoff.ru/rest"
         self.headers = {

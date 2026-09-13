@@ -21,7 +21,7 @@ templates = Jinja2Templates(directory="app/templates")
 class LoginRequest(BaseModel):
     password: str
 
-WEB_PASSWORD = os.getenv("WEB_PASSWORD", "admin")
+WEB_PASSWORD = "admin"
 
 @app.on_event("startup")
 def startup_event():
@@ -31,11 +31,11 @@ def startup_event():
 @app.get("/")
 async def root(request: Request):
     # In a real app we'd use cookies/sessions, simplified for demo
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html")
 
 @app.get("/login")
 async def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="login.html")
 
 @app.post("/api/login")
 async def login(req: LoginRequest):
