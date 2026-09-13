@@ -1,0 +1,11 @@
+User wants specific frontend features:
+- Cards for active assets.
+- Graphs with adjustable timeframe and refresh rate.
+- Display cost of 1 lot.
+- Input/settings: Max lots per purchase (default 1).
+- Input/settings: Max purchases per asset (default 1).
+- Disable trading if lot > 500 RUB (unless toggle activated).
+- A notification system that changes have been applied.
+- A "Restart Bot" button on the UI.
+Also wants Sandbox mode active, but easily switchable to PROD.
+Also wants me to establish GIT SYNC once and for all.

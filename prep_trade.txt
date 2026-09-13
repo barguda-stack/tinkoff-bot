@@ -1,0 +1,15 @@
+User needs logic to submit real orders.
+We need to use: PostOrder request
+URL: /rest/tinkoff.public.invest.api.contract.v1.OrdersService/PostOrder
+
+Required fields for PostOrder:
+- figi (or instrumentId)
+- quantity (lots)
+- price (optional for market orders)
+- direction (ORDER_DIRECTION_BUY, ORDER_DIRECTION_SELL)
+- accountId
+- orderType (ORDER_TYPE_MARKET)
+- orderId (unique string, e.g. uuid)
+
+We also need to get accountId first.
+URL: /rest/tinkoff.public.invest.api.contract.v1.UsersService/GetAccounts
