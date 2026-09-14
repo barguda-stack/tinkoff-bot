@@ -25,7 +25,7 @@ class TinkoffService:
     def _post(self, endpoint: str, payload: dict = None) -> dict:
         url = f"{self.base_url}/{endpoint}"
         try:
-            response = requests.post(url, headers=self.headers, json=payload or {}, verify=False)
+            response = requests.post(url, headers=self.headers, json=payload or {}, verify=False, timeout=15)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.SSLError as e:

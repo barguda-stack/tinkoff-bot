@@ -14,6 +14,9 @@ from app.core.scheduler import start_scheduler
 async def lifespan(app: FastAPI):
     start_scheduler()
     bot_instance.start()
+    print("\n" + "="*50)
+    print("🚀 WEB INTERFACE IS RUNNING AT: http://127.0.0.1:8000 🚀")
+    print("="*50 + "\n")
     yield
 
 app = FastAPI(title="Tinkoff Trading Bot", lifespan=lifespan)

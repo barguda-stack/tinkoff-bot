@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>Tinkoff Trading Bot</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f0f2f5; }
         .container { max-width: 1200px; margin: auto; }
@@ -22,6 +23,7 @@
         .toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
         @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
         @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+        .chart-container { width: 100%; height: 100px; margin-top: 10px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -101,6 +103,8 @@
             }
         }
 
+        let activeCharts = {};
+
         function renderAssets(assets) {
             const container = document.getElementById('assetsContainer');
             if (!assets || assets.length === 0) {
@@ -109,6 +113,11 @@
             }
 
             container.innerHTML = '';
+            
+            // Destroy old charts to prevent memory leaks
+            Object.values(activeCharts).forEach(chart => chart.destroy());
+            activeCharts = {};
+
             assets.forEach(a => {
                 const isTooExpensive = a.lot_price > 500;
                 const card = document.createElement('div');
@@ -120,7 +129,10 @@
                             ${a.active ? 'ACTIVE' : 'DISABLED'}
                         </span>
                     </div>
-                    <p style="font-size:0.9em; color:#666;">${a.name}</p>
+                    <p style="font-size:0.9em; color:#666; margin-bottom:5px;">${a.name}</p>
+                    <div class="chart-container">
+                        <canvas id="chart_${a.ticker}"></canvas>
+                    </div>
                     <p><strong>Lot Price:</strong> ${a.lot_price.toFixed(2)} RUB (Lot: ${a.lot})</p>
                     <p><strong>Strategy:</strong> ${a.best_strategy}</p>
                     <p><strong>Timeframe:</strong> 5 Min</p>
@@ -143,6 +155,42 @@
                     </div>
                 `;
                 container.appendChild(card);
+                
+                // Draw chart if data exists
+                if(a.sparkline && a.sparkline.length > 0) {
+                    const ctx = document.getElementById(`chart_${a.ticker}`).getContext('2d');
+                    const isUp = a.sparkline[0] <= a.sparkline[a.sparkline.length-1];
+                    const chartColor = isUp ? '#4CAF50' : '#f44336';
+                    const gradient = ctx.createLinearGradient(0, 0, 0, 100);
+                    gradient.addColorStop(0, chartColor + '40'); // Add transparency
+                    gradient.addColorStop(1, chartColor + '00');
+                    
+                    activeCharts[a.ticker] = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: a.sparkline.map((_, i) => i),
+                            datasets: [{
+                                data: a.sparkline,
+                                borderColor: chartColor,
+                                backgroundColor: gradient,
+                                borderWidth: 2,
+                                fill: true,
+                                pointRadius: 0,
+                                tension: 0.2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                            scales: {
+                                x: { display: false },
+                                y: { display: false, min: Math.min(...a.sparkline)*0.999, max: Math.max(...a.sparkline)*1.001 }
+                            },
+                            animation: { duration: 0 }
+                        }
+                    });
+                }
             });
         }
 

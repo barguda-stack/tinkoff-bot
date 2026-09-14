@@ -51,6 +51,9 @@ class MarketScanner:
                 if lot_price > max_lot_price:
                     is_active = False 
                     
+                # Get the last 50 close prices for the sparkline chart
+                sparkline = df['close'].tail(50).tolist()
+                
                 results.append({
                     "figi": figi,
                     "ticker": ticker,
@@ -62,7 +65,8 @@ class MarketScanner:
                     "expected_return": best_strat['return'],
                     "active": is_active,
                     "max_lots": 1,
-                    "max_trades": 1
+                    "max_trades": 1,
+                    "sparkline": sparkline
                 })
                 
                 time.sleep(0.1)
