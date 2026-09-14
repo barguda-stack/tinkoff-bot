@@ -24,9 +24,16 @@ class TinkoffService:
 
     def _post(self, endpoint: str, payload: dict = None) -> dict:
         url = f"{self.base_url}/{endpoint}"
-        response = requests.post(url, headers=self.headers, json=payload or {}, verify=False)
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = requests.post(url, headers=self.headers, json=payload or {}, verify=False)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.SSLError as e:
+            print(f"[{endpoint}] SSL Error: Your VPN, Antivirus, or network proxy is blocking the connection to Tinkoff API. Try disabling VPN or Kaspersky/DrWeb Web Shield.")
+            raise e
+        except Exception as e:
+            print(f"[{endpoint}] Request failed: {e}")
+            raise e
 
     def get_accounts(self) -> str:
         if self.sandbox:

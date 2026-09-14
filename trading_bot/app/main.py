@@ -2,14 +2,21 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
+from contextlib import asynccontextmanager
 import os
 from pydantic import BaseModel
 
 from app.core.bot import bot_instance
 from app.core.scheduler import start_scheduler
 
-app = FastAPI(title="Tinkoff Trading Bot")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_scheduler()
+    bot_instance.start()
+    yield
+
+app = FastAPI(title="Tinkoff Trading Bot", lifespan=lifespan)
 
 os.makedirs("app/static", exist_ok=True)
 os.makedirs("app/templates", exist_ok=True)
@@ -22,10 +29,9 @@ class LoginRequest(BaseModel):
 
 WEB_PASSWORD = "admin"
 
-@app.on_event("startup")
-def startup_event():
-    start_scheduler()
-    bot_instance.start()
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse("app/static/favicon.ico")
 
 @app.get("/")
 async def root(request: Request):
