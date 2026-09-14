@@ -72,6 +72,18 @@ async def toggle_bot():
         bot_instance.start()
     return {"is_running": bot_instance.is_running}
 
+@app.post("/api/update")
+async def update_bot():
+    import subprocess
+    import sys
+    try:
+        # Run git pull
+        subprocess.check_call(["git", "fetch", "origin"])
+        subprocess.check_call(["git", "reset", "--hard", "origin/master"])
+        return {"status": "ok", "message": "Update downloaded successfully. Please restart the bot using run.bat."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -29,6 +29,7 @@
         <div class="header">
             <h1>Tinkoff Trading Bot (Sandbox)</h1>
             <div>
+                <button class="btn btn-blue" style="background:#607D8B;" onclick="updateBotCode()">Update Bot (GitHub)</button>
                 <button id="toggleBtn" class="btn btn-green" onclick="toggleBot()">Start Bot</button>
                 <button class="btn btn-blue" onclick="window.location.reload()">Refresh UI</button>
             </div>
@@ -171,6 +172,22 @@
         async function toggleBot() {
             await fetch('/api/toggle_bot', { method: 'POST' });
             fetchStatus();
+        }
+
+        async function updateBotCode() {
+            if(confirm("Are you sure you want to pull the latest code from GitHub? The bot might need to be restarted manually if you don't use run.bat.")) {
+                try {
+                    const res = await fetch('/api/update', { method: 'POST' });
+                    const data = await res.json();
+                    if(data.status === "ok") {
+                        alert(data.message);
+                    } else {
+                        alert("Error: " + data.detail);
+                    }
+                } catch(e) {
+                    alert("Error communicating with server.");
+                }
+            }
         }
 
         fetchStatus();
