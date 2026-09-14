@@ -49,19 +49,38 @@ class TinkoffService:
         return data.get("instruments", [])
 
     def get_historical_candles(self, figi: str, from_time: datetime, to_time: datetime) -> pd.DataFrame:
-        payload = {
-            "figi": figi,
-            "from": from_time.isoformat() + "Z",
-            "to": to_time.isoformat() + "Z",
-            "interval": "CANDLE_INTERVAL_5_MIN"
-        }
-        data = self._post("tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles", payload)
-        candles = data.get("candles", [])
+        import time
+        all_candles = []
+        current_time = from_time
         
-        if not candles:
+        print(f"Fetching history for {figi} day by day...")
+        while current_time < to_time:
+            next_time = current_time + timedelta(days=1)
+            if next_time > to_time:
+                next_time = to_time
+                
+            payload = {
+                "figi": figi,
+                "from": current_time.isoformat() + "Z",
+                "to": next_time.isoformat() + "Z",
+                "interval": "CANDLE_INTERVAL_5_MIN"
+            }
+            
+            try:
+                data = self._post("tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles", payload)
+                candles = data.get("candles", [])
+                if candles:
+                    all_candles.extend(candles)
+            except Exception as e:
+                print(f"Error fetching candles for {figi} from {current_time} to {next_time}: {e}")
+                
+            current_time = next_time
+            time.sleep(0.15) # Rate limit protection
+
+        if not all_candles:
             return pd.DataFrame()
             
-        df = pd.DataFrame(candles)
+        df = pd.DataFrame(all_candles)
         def parse_quotation(q):
             if not isinstance(q, dict): return 0
             return int(q.get("units", 0)) + int(q.get("nano", 0)) / 1e9
