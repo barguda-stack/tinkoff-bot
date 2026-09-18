@@ -84,12 +84,16 @@ async def toggle_bot():
 @app.post("/api/update")
 async def update_bot():
     import subprocess
-    import sys
+    import os
     try:
-        # Run git pull
-        subprocess.check_call(["git", "fetch", "origin"])
-        subprocess.check_call(["git", "reset", "--hard", "origin/master"])
-        return {"status": "ok", "message": "Update downloaded successfully. Please restart the bot using run.bat."}
+        if os.name == 'nt':
+            # Run the update script in a new detached cmd window so the current process can be killed
+            subprocess.Popen('start "" update.bat', shell=True)
+            return {"status": "ok", "message": "Update started! The bot will now restart automatically. Please wait 10-15 seconds and refresh the page."}
+        else:
+            subprocess.check_call(["git", "fetch", "origin"])
+            subprocess.check_call(["git", "reset", "--hard", "origin/master"])
+            return {"status": "ok", "message": "Update downloaded successfully. Please restart manually."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

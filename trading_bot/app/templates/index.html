@@ -223,17 +223,19 @@
         }
 
         async function updateBotCode() {
-            if(confirm("Are you sure you want to pull the latest code from GitHub? The bot might need to be restarted manually if you don't use run.bat.")) {
+            if(confirm("Are you sure you want to pull the latest code from GitHub? The bot will update and restart automatically.")) {
                 try {
                     const res = await fetch('/api/update', { method: 'POST' });
                     const data = await res.json();
                     if(data.status === "ok") {
                         alert(data.message);
+                        setTimeout(() => window.location.reload(), 10000); // Reload after 10 seconds
                     } else {
                         alert("Error: " + data.detail);
                     }
                 } catch(e) {
-                    alert("Error communicating with server.");
+                    alert("Update initiated. Reconnecting in 10 seconds...");
+                    setTimeout(() => window.location.reload(), 10000);
                 }
             }
         }
