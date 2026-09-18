@@ -83,6 +83,12 @@ async def toggle_bot():
         bot_instance.start()
     return {"is_running": bot_instance.is_running}
 
+@app.post("/api/scan")
+async def manual_scan():
+    import threading
+    threading.Thread(target=bot_instance._run_scan).start()
+    return {"status": "ok", "message": "Премаркет запущен в фоне"}
+
 @app.post("/api/update")
 async def update_bot():
     import subprocess

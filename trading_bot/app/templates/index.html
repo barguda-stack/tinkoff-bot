@@ -44,6 +44,7 @@
         <div class="header">
             <h1>Торговый бот Tinkoff (Песочница)</h1>
             <div>
+                <button class="btn btn-blue" style="background:#FF9800;" onclick="triggerScan()">Запустить Премаркет</button>
                 <button class="btn btn-blue" style="background:#607D8B;" onclick="updateBotCode()">Обновить код (GitHub)</button>
                 <button id="toggleBtn" class="btn btn-green" onclick="toggleBot()">Запустить бота</button>
                 <button class="btn btn-blue" onclick="window.location.reload()">Обновить страницу</button>
@@ -83,10 +84,16 @@
             <span class="close-modal" onclick="closeModal(event, true)">&times;</span>
             <h2 id="modalTitle">Детали актива</h2>
             <div class="time-filters" id="timeFilters">
-                <button class="time-filter-btn" onclick="updateChartTimeframe(1)">1 Д</button>
-                <button class="time-filter-btn" onclick="updateChartTimeframe(3)">3 Д</button>
-                <button class="time-filter-btn" onclick="updateChartTimeframe(7)">1 Н</button>
-                <button class="time-filter-btn active" onclick="updateChartTimeframe(30)">1 М</button>
+                <button class="time-filter-btn" onclick="updateChartPeriod(1)">1 Д</button>
+                <button class="time-filter-btn" onclick="updateChartPeriod(3)">3 Д</button>
+                <button class="time-filter-btn" onclick="updateChartPeriod(7)">1 Н</button>
+                <button class="time-filter-btn active" onclick="updateChartPeriod(30)">1 М</button>
+                <span style="margin: 0 10px; color: #ccc;">|</span>
+                <span style="font-size: 0.9em; color: #666; margin-right: 5px;">Таймфрейм:</span>
+                <button class="time-filter-btn timeframe-btn active" onclick="updateChartTimeframe(5)">5м</button>
+                <button class="time-filter-btn timeframe-btn" onclick="updateChartTimeframe(15)">15м</button>
+                <button class="time-filter-btn timeframe-btn" onclick="updateChartTimeframe(30)">30м</button>
+                <button class="time-filter-btn timeframe-btn" onclick="updateChartTimeframe(60)">1Ч</button>
             </div>
             <div class="modal-chart-container">
                 <canvas id="modalChart"></canvas>
@@ -153,7 +160,14 @@
             Object.values(activeCharts).forEach(chart => chart.destroy());
             activeCharts = {};
 
-            assets.forEach(a => {
+            // Sort assets by lot price (ascending)
+            const sortedAssets = [...assets].sort((a, b) => {
+                if(a.status !== "ГОТОВ" && b.status === "ГОТОВ") return 1;
+                if(a.status === "ГОТОВ" && b.status !== "ГОТОВ") return -1;
+                return a.lot_price - b.lot_price;
+            });
+
+            sortedAssets.forEach(a => {
                 const isTooExpensive = a.lot_price > 500;
                 const isReady = a.status === "READY";
                 
@@ -169,15 +183,19 @@
                     card.title = "Двойной клик для просмотра статуса (идет тестирование)...";
                 }
                 
+                const isReadyStr = a.status === "ГОТОВ" || a.status === "READY"; // check both just in case
+
                 let statusHtml = '';
-                if (isReady) {
-                    statusHtml = `<span style="color: ${isTooExpensive && !a.active ? 'red' : 'green'}">${a.active ? 'ВКЛ' : 'ВЫКЛ'}</span>`;
+                if (isReadyStr) {
+                    const btnClass = a.active ? 'btn-red' : 'btn-green';
+                    const btnText = a.active ? 'Выкл' : 'Вкл';
+                    statusHtml = `<button class="btn ${btnClass}" style="padding: 2px 6px; font-size: 0.8em; z-index: 10;" onclick="event.stopPropagation(); toggleAsset('${a.ticker}', ${!a.active})">${btnText}</button>`;
                 } else {
                     statusHtml = `<span style="color: #FF9800; font-size: 0.8em;">${a.status}</span>`;
                 }
 
                 let contentHtml = '';
-                if (isReady) {
+                if (isReadyStr) {
                     contentHtml = `
                         <div class="chart-container">
                             <canvas id="chart_${a.ticker}"></canvas>
@@ -194,7 +212,7 @@
                 }
                 
                 card.innerHTML = `
-                    <div class="asset-header">
+                    <div class="asset-header" style="align-items: center;">
                         <span>${a.ticker}</span>
                         ${statusHtml}
                     </div>
@@ -244,6 +262,8 @@
         }
 
         let currentModalTicker = null;
+        let currentPeriodDays = 30;
+        let currentTimeframeMins = 5;
 
         function openFullscreen(ticker) {
             currentModalTicker = ticker;
@@ -296,25 +316,60 @@
                 `;
                 document.getElementById('modalSettings').innerHTML = settingsHtml;
 
-                // Default to 1 Month view
-                updateChartTimeframe(30);
+                // Default to 1 Month view, 5 min TF
+                updateChartDisplay();
             }
 
             document.getElementById('modalOverlay').classList.add('active');
         }
-
-        function updateChartTimeframe(days) {
-            // Update button styles
-            document.querySelectorAll('.time-filter-btn').forEach(btn => btn.classList.remove('active'));
+        
+        function updateChartPeriod(days) {
+            currentPeriodDays = days;
+            // Update UI buttons
+            const btns = document.querySelectorAll('#timeFilters > .time-filter-btn:not(.timeframe-btn)');
+            btns.forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
+            updateChartDisplay();
+        }
 
+        function updateChartTimeframe(mins) {
+            currentTimeframeMins = mins;
+            // Update UI buttons
+            const btns = document.querySelectorAll('.timeframe-btn');
+            btns.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            updateChartDisplay();
+        }
+
+        function updateChartDisplay() {
             if(!currentModalTicker) return;
             const a = allAssetsData.find(x => x.ticker === currentModalTicker);
             if(!a || !a.chart_data || a.chart_data.length === 0) return;
 
-            // 5 min candles: 12 per hour * 24 = 288 per day.
-            const candlesNeeded = days * 288;
-            const chartData = a.chart_data.slice(-candlesNeeded);
+            // 1. Slice by Period
+            const candlesNeeded = currentPeriodDays * 288; // 288 5-min candles per day
+            const rawData = a.chart_data.slice(-candlesNeeded);
+            
+            // 2. Aggregate by Timeframe
+            // The raw data is in 5-minute intervals. 
+            // If requested 15m -> group every 3 candles. If 30m -> group every 6. If 60m -> group every 12.
+            const groupSize = currentTimeframeMins / 5;
+            let chartData = [];
+            
+            if (groupSize <= 1) {
+                chartData = rawData;
+            } else {
+                for(let i=0; i<rawData.length; i+=groupSize) {
+                    const chunk = rawData.slice(i, i+groupSize);
+                    if(chunk.length === 0) continue;
+                    // For a simple line chart, we can just take the close price of the last candle in the chunk
+                    const lastCandle = chunk[chunk.length-1];
+                    chartData.push({
+                        x: chunk[0].x, // Use the start time of the period
+                        y: lastCandle.y
+                    });
+                }
+            }
 
             if(modalChartInstance) modalChartInstance.destroy();
             const ctx = document.getElementById('modalChart').getContext('2d');
@@ -418,6 +473,19 @@
         async function toggleBot() {
             await fetch('/api/toggle_bot', { method: 'POST' });
             fetchStatus();
+        }
+
+        async function triggerScan() {
+            try {
+                const res = await fetch('/api/scan', { method: 'POST' });
+                const data = await res.json();
+                if(data.status === "ok") {
+                    showToast(data.message);
+                    fetchStatus();
+                }
+            } catch (e) {
+                alert("Ошибка запуска премаркета");
+            }
         }
 
         async function updateBotCode() {

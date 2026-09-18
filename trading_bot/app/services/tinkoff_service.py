@@ -28,6 +28,11 @@ class TinkoffService:
             response = requests.post(url, headers=self.headers, json=payload or {}, verify=False, timeout=15)
             response.raise_for_status()
             return response.json()
+        except requests.exceptions.HTTPError as e:
+            print(f"[{endpoint}] Ошибка HTTP: {e}")
+            if e.response is not None:
+                print(f"Ответ сервера: {e.response.text}")
+            raise e
         except requests.exceptions.SSLError as e:
             print(f"[{endpoint}] Ошибка SSL: Ваш VPN, Антивирус или прокси блокирует соединение с Tinkoff API. Отключите VPN или Веб-экран Касперского.")
             raise e

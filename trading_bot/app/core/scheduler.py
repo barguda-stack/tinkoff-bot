@@ -108,11 +108,11 @@ def run_trading_cycle():
 
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    # Market scan every 2 hours
-    scheduler.add_job(bot_instance._run_scan, 'interval', hours=2)
+    # Market scan (premarket) every 60 minutes
+    scheduler.add_job(bot_instance._run_scan, 'interval', minutes=60)
     
     # Trading cycle every 5 minutes (matching timeframe)
     scheduler.add_job(run_trading_cycle, 'interval', minutes=5)
     
     scheduler.start()
-    print("Scheduler started.")
+    print("Планировщик задач запущен (Премаркет каждый час, Торговля каждые 5 мин).")

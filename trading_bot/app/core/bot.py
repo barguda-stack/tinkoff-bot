@@ -56,7 +56,7 @@ class TradingBot:
             
         print("Начинаю сканирование рынка для поиска активов...")
         try:
-            self.selected_assets = self.scanner.scan_and_select_top_assets(max_assets=10, max_lot_price=500.0)
+            self.selected_assets = self.scanner.scan_and_select_top_assets(max_assets=20, max_lot_price=500.0)
             self.last_scan_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"Найдено {len(self.selected_assets)} подходящих активов. Запускаю фоновое тестирование...")
             

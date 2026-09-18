@@ -25,7 +25,7 @@ class MarketScanner:
         print(f"Найдено {len(filtered_shares)} рублевых акций. Возвращаю первоначальный список для фоновой загрузки.")
         
         results = []
-        for share in filtered_shares[:10]: 
+        for share in filtered_shares[:20]: 
             figi = share['figi']
             ticker = share['ticker']
             lot = share.get("lot", 1)
