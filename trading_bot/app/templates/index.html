@@ -14,16 +14,24 @@
         .btn-green { background: #4CAF50; }
         .btn-red { background: #f44336; }
         .btn-blue { background: #2196F3; }
-        .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-        .asset-card { background: white; border: 1px solid #ddd; padding: 15px; border-radius: 8px; }
-        .asset-header { display: flex; justify-content: space-between; font-weight: bold; font-size: 1.2em; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px;}
+        .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+        .asset-card { background: white; border: 1px solid #ddd; padding: 10px; border-radius: 6px; cursor: pointer; transition: transform 0.2s; font-size: 0.8em; position: relative;}
+        .asset-card:hover { transform: scale(1.02); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .asset-header { display: flex; justify-content: space-between; font-weight: bold; font-size: 1.1em; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px;}
         .form-group { margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;}
         .form-group input { width: 60px; padding: 5px; }
         .toast { visibility: hidden; min-width: 250px; background-color: #333; color: #fff; text-align: center; border-radius: 2px; padding: 16px; position: fixed; z-index: 1; right: 30px; bottom: 30px; }
         .toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
         @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
         @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
-        .chart-container { width: 100%; height: 100px; margin-top: 10px; margin-bottom: 10px; }
+        .chart-container { width: 100%; height: 60px; margin-top: 5px; margin-bottom: 5px; }
+        
+        /* Modal Styles */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-overlay.active { display: flex; }
+        .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto; position: relative; }
+        .close-modal { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: #666; }
+        .modal-chart-container { width: 100%; height: 300px; margin: 20px 0; }
     </style>
 </head>
 <body>
@@ -63,8 +71,23 @@
     </div>
     
     <div id="toast" class="toast">Changes Saved!</div>
+    
+    <!-- Modal -->
+    <div id="modalOverlay" class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <span class="close-modal" onclick="closeModal(event, true)">&times;</span>
+            <h2 id="modalTitle">Asset Details</h2>
+            <div class="modal-chart-container">
+                <canvas id="modalChart"></canvas>
+            </div>
+            <div id="modalSettings"></div>
+        </div>
+    </div>
 
     <script>
+        let allAssetsData = [];
+        let modalChartInstance = null;
+
         function showToast(msg) {
             const toast = document.getElementById("toast");
             toast.innerText = msg;
@@ -97,6 +120,7 @@
                     statusText.innerText = 'Stopped';
                 }
 
+                allAssetsData = data.assets;
                 renderAssets(data.assets);
             } catch (e) {
                 console.error(e);
@@ -122,37 +146,21 @@
                 const isTooExpensive = a.lot_price > 500;
                 const card = document.createElement('div');
                 card.className = 'asset-card';
+                card.ondblclick = () => openFullscreen(a.ticker);
+                card.title = "Double-click to open details and settings";
+                
                 card.innerHTML = `
                     <div class="asset-header">
                         <span>${a.ticker}</span>
                         <span style="color: ${isTooExpensive && !a.active ? 'red' : 'green'}">
-                            ${a.active ? 'ACTIVE' : 'DISABLED'}
+                            ${a.active ? 'ON' : 'OFF'}
                         </span>
                     </div>
-                    <p style="font-size:0.9em; color:#666; margin-bottom:5px;">${a.name}</p>
+                    <p style="font-size:0.8em; color:#666; margin-bottom:2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${a.name}</p>
                     <div class="chart-container">
                         <canvas id="chart_${a.ticker}"></canvas>
                     </div>
-                    <p><strong>Lot Price:</strong> ${a.lot_price.toFixed(2)} RUB (Lot: ${a.lot})</p>
-                    <p><strong>Strategy:</strong> ${a.best_strategy}</p>
-                    <p><strong>Timeframe:</strong> 5 Min</p>
-                    <hr style="border:0; border-top:1px solid #eee; margin: 10px 0;">
-                    
-                    <div class="form-group">
-                        <label>Max lots per trade:</label>
-                        <input type="number" id="max_lots_${a.ticker}" value="${a.max_lots || 1}" min="1">
-                    </div>
-                    <div class="form-group">
-                        <label>Max parallel trades:</label>
-                        <input type="number" id="max_trades_${a.ticker}" value="${a.max_trades || 1}" min="1">
-                    </div>
-                    
-                    <div style="margin-top:15px; display:flex; gap:10px;">
-                        <button class="btn btn-blue" style="flex:1; padding:5px;" onclick="saveSettings('${a.ticker}')">Save</button>
-                        <button class="btn ${a.active ? 'btn-red' : 'btn-green'}" style="flex:1; padding:5px;" onclick="toggleAsset('${a.ticker}', ${!a.active})">
-                            ${a.active ? 'Disable' : 'Enable'}
-                        </button>
-                    </div>
+                    <p style="margin:2px 0;"><strong>Price:</strong> ${a.lot_price.toFixed(2)} RUB</p>
                 `;
                 container.appendChild(card);
                 
@@ -192,6 +200,81 @@
                     });
                 }
             });
+        }
+
+        function openFullscreen(ticker) {
+            const a = allAssetsData.find(x => x.ticker === ticker);
+            if(!a) return;
+
+            document.getElementById('modalTitle').innerText = `${a.ticker} - ${a.name}`;
+            
+            const settingsHtml = `
+                <div style="background: #f9f9f9; padding: 15px; border-radius: 8px;">
+                    <p><strong>Lot Price:</strong> ${a.lot_price.toFixed(2)} RUB (Lot size: ${a.lot})</p>
+                    <p><strong>Strategy:</strong> ${a.best_strategy}</p>
+                    <p><strong>Expected Return:</strong> ${(a.expected_return * 100).toFixed(2)}%</p>
+                    <hr style="border:0; border-top:1px solid #ddd; margin: 15px 0;">
+                    
+                    <div class="form-group">
+                        <label>Max lots per trade:</label>
+                        <input type="number" id="max_lots_${a.ticker}" value="${a.max_lots || 1}" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Max parallel trades:</label>
+                        <input type="number" id="max_trades_${a.ticker}" value="${a.max_trades || 1}" min="1">
+                    </div>
+                    
+                    <div style="margin-top:15px; display:flex; gap:10px;">
+                        <button class="btn btn-blue" style="flex:1;" onclick="saveSettings('${a.ticker}')">Save Settings</button>
+                        <button class="btn ${a.active ? 'btn-red' : 'btn-green'}" style="flex:1;" onclick="toggleAsset('${a.ticker}', ${!a.active}); closeModal(event, true);">
+                            ${a.active ? 'Disable Asset' : 'Enable Asset'}
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modalSettings').innerHTML = settingsHtml;
+
+            // Draw large chart
+            if(modalChartInstance) modalChartInstance.destroy();
+            const ctx = document.getElementById('modalChart').getContext('2d');
+            
+            if(a.sparkline && a.sparkline.length > 0) {
+                const isUp = a.sparkline[0] <= a.sparkline[a.sparkline.length-1];
+                const chartColor = isUp ? '#4CAF50' : '#f44336';
+                const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+                gradient.addColorStop(0, chartColor + '60');
+                gradient.addColorStop(1, chartColor + '00');
+
+                modalChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: a.sparkline.map((_, i) => '-' + (a.sparkline.length - i) * 5 + 'm'),
+                        datasets: [{
+                            label: 'Price (RUB)',
+                            data: a.sparkline,
+                            borderColor: chartColor,
+                            backgroundColor: gradient,
+                            borderWidth: 2,
+                            fill: true,
+                            pointRadius: 2,
+                            tension: 0.2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                    }
+                });
+            }
+
+            document.getElementById('modalOverlay').classList.add('active');
+        }
+
+        function closeModal(e, force = false) {
+            if (force || e.target === document.getElementById('modalOverlay')) {
+                document.getElementById('modalOverlay').classList.remove('active');
+            }
         }
 
         async function saveSettings(ticker) {
