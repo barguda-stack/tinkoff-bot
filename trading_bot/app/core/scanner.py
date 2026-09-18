@@ -22,57 +22,29 @@ class MarketScanner:
                 continue
             filtered_shares.append(s)
             
-        print(f"Found {len(filtered_shares)} RUB shares. Backtesting top candidates...")
+        print(f"Found {len(filtered_shares)} RUB shares. Returning initial list for background processing.")
         
         results = []
-        now = datetime.datetime.utcnow()
-        # Тинькофф API не позволяет скачивать 5-минутные свечи сразу за год одним запросом.
-        # Максимум за 1 день.
-        one_day_ago = now - datetime.timedelta(days=1) 
-        
         for share in filtered_shares[:10]: 
             figi = share['figi']
             ticker = share['ticker']
             lot = share.get("lot", 1)
             name = share.get("name", "")
             
-            try:
-                df = self.client.get_historical_candles(figi, one_day_ago, now)
-                if df.empty:
-                    continue
-                    
-                current_price = df['close'].iloc[-1]
-                lot_price = current_price * lot
+            results.append({
+                "figi": figi,
+                "ticker": ticker,
+                "name": name,
+                "lot": lot,
+                "current_price": 0,
+                "lot_price": 0,
+                "best_strategy": "Pending...",
+                "expected_return": 0,
+                "active": False,
+                "max_lots": 1,
+                "max_trades": 1,
+                "sparkline": [],
+                "status": "PENDING"
+            })
                 
-                tester = Backtester(df)
-                best_strat = tester.get_best_strategy()
-                
-                is_active = True
-                if lot_price > max_lot_price:
-                    is_active = False 
-                    
-                # Get the last 50 close prices for the sparkline chart
-                sparkline = df['close'].tail(50).tolist()
-                
-                results.append({
-                    "figi": figi,
-                    "ticker": ticker,
-                    "name": name,
-                    "lot": lot,
-                    "current_price": current_price,
-                    "lot_price": lot_price,
-                    "best_strategy": best_strat['name'],
-                    "expected_return": best_strat['return'],
-                    "active": is_active,
-                    "max_lots": 1,
-                    "max_trades": 1,
-                    "sparkline": sparkline
-                })
-                
-                time.sleep(0.1)
-                
-            except Exception as e:
-                print(f"Failed to process {ticker}: {e}")
-                
-        results.sort(key=lambda x: x['expected_return'], reverse=True)
         return results[:max_assets]

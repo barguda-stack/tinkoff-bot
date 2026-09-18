@@ -65,6 +65,8 @@ async def update_asset(data: dict):
     for asset in bot_instance.selected_assets:
         if asset["ticker"] == ticker:
             if "active" in data:
+                if data["active"] and asset.get("status") != "READY":
+                    raise HTTPException(status_code=400, detail="Cannot activate asset before backtesting is READY")
                 asset["active"] = data["active"]
             if "max_lots" in data:
                 asset["max_lots"] = data["max_lots"]

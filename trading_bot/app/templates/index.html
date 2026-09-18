@@ -132,7 +132,7 @@
         function renderAssets(assets) {
             const container = document.getElementById('assetsContainer');
             if (!assets || assets.length === 0) {
-                container.innerHTML = '<p style="color: #666; font-style: italic;">Scanning the market and downloading 1-year historical data for backtesting. This may take 5-10 minutes...</p>';
+                container.innerHTML = '<p style="color: #666; font-style: italic;">Initializing scan...</p>';
                 return;
             }
 
@@ -144,28 +144,55 @@
 
             assets.forEach(a => {
                 const isTooExpensive = a.lot_price > 500;
+                const isReady = a.status === "READY";
+                
                 const card = document.createElement('div');
                 card.className = 'asset-card';
-                card.ondblclick = () => openFullscreen(a.ticker);
-                card.title = "Double-click to open details and settings";
+                
+                if (isReady) {
+                    card.ondblclick = () => openFullscreen(a.ticker);
+                    card.title = "Double-click to open details and settings";
+                } else {
+                    card.style.opacity = '0.7';
+                    card.title = "Waiting for backtesting to finish...";
+                }
+                
+                let statusHtml = '';
+                if (isReady) {
+                    statusHtml = `<span style="color: ${isTooExpensive && !a.active ? 'red' : 'green'}">${a.active ? 'ON' : 'OFF'}</span>`;
+                } else {
+                    statusHtml = `<span style="color: #FF9800; font-size: 0.8em;">${a.status}</span>`;
+                }
+
+                let contentHtml = '';
+                if (isReady) {
+                    contentHtml = `
+                        <div class="chart-container">
+                            <canvas id="chart_${a.ticker}"></canvas>
+                        </div>
+                        <p style="margin:2px 0;"><strong>Price:</strong> ${a.lot_price.toFixed(2)} RUB</p>
+                    `;
+                } else {
+                    contentHtml = `
+                        <div style="height: 60px; display: flex; align-items: center; justify-content: center; margin-top: 5px; margin-bottom: 5px; background: #f5f5f5; border-radius: 4px;">
+                            <span style="color: #888; font-size: 0.8em; text-align: center;">Downloading history<br>& optimizing strategy...</span>
+                        </div>
+                        <p style="margin:2px 0; color: #888;"><strong>Price:</strong> --- RUB</p>
+                    `;
+                }
                 
                 card.innerHTML = `
                     <div class="asset-header">
                         <span>${a.ticker}</span>
-                        <span style="color: ${isTooExpensive && !a.active ? 'red' : 'green'}">
-                            ${a.active ? 'ON' : 'OFF'}
-                        </span>
+                        ${statusHtml}
                     </div>
                     <p style="font-size:0.8em; color:#666; margin-bottom:2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${a.name}</p>
-                    <div class="chart-container">
-                        <canvas id="chart_${a.ticker}"></canvas>
-                    </div>
-                    <p style="margin:2px 0;"><strong>Price:</strong> ${a.lot_price.toFixed(2)} RUB</p>
+                    ${contentHtml}
                 `;
                 container.appendChild(card);
                 
-                // Draw chart if data exists
-                if(a.sparkline && a.sparkline.length > 0) {
+                // Draw chart if data exists and is ready
+                if(isReady && a.sparkline && a.sparkline.length > 0) {
                     const ctx = document.getElementById(`chart_${a.ticker}`).getContext('2d');
                     const isUp = a.sparkline[0] <= a.sparkline[a.sparkline.length-1];
                     const chartColor = isUp ? '#4CAF50' : '#f44336';
@@ -291,13 +318,25 @@
         }
 
         async function toggleAsset(ticker, newState) {
-            await fetch('/api/update_asset', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ticker: ticker, active: newState })
-            });
-            showToast(`${ticker} is now ${newState ? 'Active' : 'Disabled'}`);
-            fetchStatus();
+            try {
+                const res = await fetch('/api/update_asset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ticker: ticker, active: newState })
+                });
+                
+                if (res.status === 400) {
+                    const data = await res.json();
+                    alert(data.detail);
+                    return;
+                }
+                
+                showToast(`${ticker} is now ${newState ? 'Active' : 'Disabled'}`);
+                fetchStatus();
+            } catch (e) {
+                console.error(e);
+                alert("Error toggling asset");
+            }
         }
 
         async function toggleBot() {

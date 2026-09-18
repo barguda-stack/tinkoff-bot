@@ -54,13 +54,66 @@ class TradingBot:
         if not self.is_running:
             return
             
-        print("Starting market scan to select top strategies and assets...")
+        print("Starting market scan to find candidate assets...")
         try:
-            self.selected_assets = self.scanner.scan_and_select_top_assets(max_assets=20, max_lot_price=500.0)
+            self.selected_assets = self.scanner.scan_and_select_top_assets(max_assets=10, max_lot_price=500.0)
             self.last_scan_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"Scan complete. Selected {len(self.selected_assets)} assets.")
+            print(f"Found {len(self.selected_assets)} initial candidates. Starting background backtesting...")
+            
+            # Start background backtesting for each asset
+            threading.Thread(target=self._background_backtest, daemon=True).start()
+            
         except Exception as e:
             print(f"Scan failed: {e}")
+
+    def _background_backtest(self):
+        from app.services.backtester import Backtester
+        
+        now = datetime.datetime.utcnow()
+        one_year_ago = now - datetime.timedelta(days=365)
+        
+        for asset in self.selected_assets:
+            if not self.is_running:
+                break
+                
+            asset["status"] = "DOWNLOADING"
+            print(f"[{asset['ticker']}] Status: DOWNLOADING (Fetching 1 year of history)...")
+            
+            try:
+                df = self.client.get_historical_candles(asset['figi'], one_year_ago, now)
+                
+                if df.empty:
+                    asset["status"] = "ERROR: No data"
+                    continue
+                
+                asset["status"] = "BACKTESTING"
+                print(f"[{asset['ticker']}] Status: BACKTESTING...")
+                
+                current_price = df['close'].iloc[-1]
+                lot_price = current_price * asset['lot']
+                
+                tester = Backtester(df)
+                best_strat = tester.get_best_strategy()
+                
+                asset["current_price"] = current_price
+                asset["lot_price"] = lot_price
+                asset["best_strategy"] = best_strat['name']
+                asset["expected_return"] = best_strat['return']
+                asset["sparkline"] = df['close'].tail(50).tolist()
+                
+                is_active = True
+                if lot_price > 500.0:
+                    is_active = False
+                
+                asset["active"] = is_active
+                asset["status"] = "READY"
+                print(f"[{asset['ticker']}] Status: READY. Strategy: {best_strat['name']}")
+                
+            except Exception as e:
+                asset["status"] = "ERROR"
+                print(f"[{asset['ticker']}] Failed during backtest: {e}")
+                
+        print("Background backtesting complete for all assets.")
 
     def execute_trade(self, figi: str, ticker: str, direction: str, quantity: int):
         try:

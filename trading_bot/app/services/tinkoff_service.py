@@ -57,49 +57,86 @@ class TinkoffService:
 
     def get_historical_candles(self, figi: str, from_time: datetime, to_time: datetime) -> pd.DataFrame:
         import time
-        all_candles = []
-        current_time = from_time
         
-        print(f"Fetching history for {figi} day by day...")
-        while current_time < to_time:
-            next_time = current_time + timedelta(days=1)
-            if next_time > to_time:
-                next_time = to_time
-                
-            payload = {
-                "figi": figi,
-                "from": current_time.isoformat() + "Z",
-                "to": next_time.isoformat() + "Z",
-                "interval": "CANDLE_INTERVAL_5_MIN"
-            }
-            
-            try:
-                data = self._post("tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles", payload)
-                candles = data.get("candles", [])
-                if candles:
-                    all_candles.extend(candles)
-            except Exception as e:
-                print(f"Error fetching candles for {figi} from {current_time} to {next_time}: {e}")
-                
-            current_time = next_time
-            time.sleep(0.15) # Rate limit protection
-
-        if not all_candles:
-            return pd.DataFrame()
-            
-        df = pd.DataFrame(all_candles)
+        # Cache mechanism
+        cache_dir = "cache"
+        os.makedirs(cache_dir, exist_ok=True)
+        cache_file = os.path.join(cache_dir, f"{figi}.csv")
+        
+        df_cached = pd.DataFrame()
+        fetch_from = from_time
+        
         def parse_quotation(q):
             if not isinstance(q, dict): return 0
             return int(q.get("units", 0)) + int(q.get("nano", 0)) / 1e9
+            
+        if os.path.exists(cache_file):
+            try:
+                df_cached = pd.read_csv(cache_file, parse_dates=['time'], index_col='time')
+                if not df_cached.empty:
+                    last_cached_time = df_cached.index.max().tz_localize(None)
+                    if last_cached_time > fetch_from:
+                        fetch_from = last_cached_time + timedelta(minutes=5)
+            except Exception as e:
+                print(f"Cache read error for {figi}: {e}")
+                df_cached = pd.DataFrame()
 
-        df['open'] = df['open'].apply(parse_quotation)
-        df['close'] = df['close'].apply(parse_quotation)
-        df['high'] = df['high'].apply(parse_quotation)
-        df['low'] = df['low'].apply(parse_quotation)
-        df['volume'] = df['volume']
-        df['time'] = pd.to_datetime(df['time'])
-        df.set_index('time', inplace=True)
-        return df
+        all_candles = []
+        current_time = fetch_from
+        
+        if current_time < to_time:
+            print(f"[{figi}] Fetching new history from {current_time.strftime('%Y-%m-%d')} to {to_time.strftime('%Y-%m-%d')}...")
+            while current_time < to_time:
+                next_time = current_time + timedelta(days=1)
+                if next_time > to_time:
+                    next_time = to_time
+                    
+                payload = {
+                    "figi": figi,
+                    "from": current_time.isoformat() + "Z",
+                    "to": next_time.isoformat() + "Z",
+                    "interval": "CANDLE_INTERVAL_5_MIN"
+                }
+                
+                try:
+                    data = self._post("tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles", payload)
+                    candles = data.get("candles", [])
+                    if candles:
+                        all_candles.extend(candles)
+                except Exception as e:
+                    print(f"Error fetching candles for {figi} from {current_time} to {next_time}: {e}")
+                    
+                current_time = next_time
+                time.sleep(0.15) # Rate limit protection
+
+        df_new = pd.DataFrame()
+        if all_candles:
+            df_new = pd.DataFrame(all_candles)
+            df_new['open'] = df_new['open'].apply(parse_quotation)
+            df_new['close'] = df_new['close'].apply(parse_quotation)
+            df_new['high'] = df_new['high'].apply(parse_quotation)
+            df_new['low'] = df_new['low'].apply(parse_quotation)
+            df_new['volume'] = df_new['volume']
+            df_new['time'] = pd.to_datetime(df_new['time']).dt.tz_localize(None)
+            df_new.set_index('time', inplace=True)
+            
+        if not df_cached.empty and not df_new.empty:
+            df_final = pd.concat([df_cached, df_new])
+            df_final = df_final[~df_final.index.duplicated(keep='last')]
+        elif not df_new.empty:
+            df_final = df_new
+        else:
+            df_final = df_cached
+            
+        if not df_final.empty:
+            df_final.sort_index(inplace=True)
+            # Save updated cache
+            try:
+                df_final.to_csv(cache_file)
+            except Exception as e:
+                print(f"Cache write error for {figi}: {e}")
+                
+        return df_final
 
     def place_market_order(self, figi: str, quantity: int, direction: str):
         if not self.account_id:
