@@ -1,16 +1,16 @@
 @echo off
-chcp 65001 > nul
-echo Запуск Торгового Бота Tinkoff...
+chcp 1251 > nul
+echo Starting Tinkoff Trading Bot...
 set VENV_OK=0
 if exist "venv\Scripts\activate.bat" (
     set VENV_OK=1
 )
 if "%VENV_OK%"=="0" (
-    echo Виртуальное окружение не найдено. Создаю (это займет пару минут)...
+    echo Virtual environment not found. Creating it...
     if exist "venv" rd /s /q venv
     python -m venv venv
     call venv\Scripts\activate.bat
-    echo Установка библиотек...
+    echo Installing requirements...
     pip install -r requirements.txt
 ) else (
     call venv\Scripts\activate.bat
