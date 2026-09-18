@@ -160,12 +160,13 @@
                 const card = document.createElement('div');
                 card.className = 'asset-card';
                 
+                card.ondblclick = () => openFullscreen(a.ticker);
+                
                 if (isReady) {
-                    card.ondblclick = () => openFullscreen(a.ticker);
                     card.title = "Двойной клик для настроек и графиков";
                 } else {
                     card.style.opacity = '0.7';
-                    card.title = "Ожидание завершения тестирования...";
+                    card.title = "Двойной клик для просмотра статуса (идет тестирование)...";
                 }
                 
                 let statusHtml = '';
@@ -251,34 +252,53 @@
 
             document.getElementById('modalTitle').innerText = `${a.ticker} - ${a.name}`;
             
-            const settingsHtml = `
-                <div style="background: #f9f9f9; padding: 15px; border-radius: 8px;">
-                    <p><strong>Цена лота:</strong> ${a.lot_price.toFixed(2)} ₽ (В лоте: ${a.lot} шт)</p>
-                    <p><strong>Выбранная стратегия:</strong> ${a.best_strategy}</p>
-                    <p><strong>Ожидаемая доходность (за год):</strong> ${(a.expected_return * 100).toFixed(2)}%</p>
-                    <hr style="border:0; border-top:1px solid #ddd; margin: 15px 0;">
-                    
-                    <div class="form-group">
-                        <label>Макс. лотов на 1 сделку:</label>
-                        <input type="number" id="max_lots_${a.ticker}" value="${a.max_lots || 1}" min="1">
+            let settingsHtml = '';
+            
+            if (a.status !== "ГОТОВ") {
+                settingsHtml = `
+                    <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; text-align: center;">
+                        <h3 style="color: #FF9800;">Статус: ${a.status}</h3>
+                        <p style="color: #666;">Подождите, идет скачивание истории и бэктестинг...</p>
+                        <p>После завершения здесь появятся график и настройки.</p>
                     </div>
-                    <div class="form-group">
-                        <label>Макс. параллельных сделок:</label>
-                        <input type="number" id="max_trades_${a.ticker}" value="${a.max_trades || 1}" min="1">
+                `;
+                document.getElementById('modalSettings').innerHTML = settingsHtml;
+                
+                // Clear chart
+                if(modalChartInstance) {
+                    modalChartInstance.destroy();
+                    modalChartInstance = null;
+                }
+            } else {
+                settingsHtml = `
+                    <div style="background: #f9f9f9; padding: 15px; border-radius: 8px;">
+                        <p><strong>Цена лота:</strong> ${a.lot_price.toFixed(2)} ₽ (В лоте: ${a.lot} шт)</p>
+                        <p><strong>Выбранная стратегия:</strong> ${a.best_strategy}</p>
+                        <p><strong>Ожидаемая доходность (за год):</strong> ${(a.expected_return * 100).toFixed(2)}%</p>
+                        <hr style="border:0; border-top:1px solid #ddd; margin: 15px 0;">
+                        
+                        <div class="form-group">
+                            <label>Макс. лотов на 1 сделку:</label>
+                            <input type="number" id="max_lots_${a.ticker}" value="${a.max_lots || 1}" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>Макс. параллельных сделок:</label>
+                            <input type="number" id="max_trades_${a.ticker}" value="${a.max_trades || 1}" min="1">
+                        </div>
+                        
+                        <div style="margin-top:15px; display:flex; gap:10px;">
+                            <button class="btn btn-blue" style="flex:1;" onclick="saveSettings('${a.ticker}')">Сохранить настройки</button>
+                            <button class="btn ${a.active ? 'btn-red' : 'btn-green'}" style="flex:1;" onclick="toggleAsset('${a.ticker}', ${!a.active}); closeModal(event, true);">
+                                ${a.active ? 'Отключить торговлю' : 'Разрешить торговлю'}
+                            </button>
+                        </div>
                     </div>
-                    
-                    <div style="margin-top:15px; display:flex; gap:10px;">
-                        <button class="btn btn-blue" style="flex:1;" onclick="saveSettings('${a.ticker}')">Сохранить настройки</button>
-                        <button class="btn ${a.active ? 'btn-red' : 'btn-green'}" style="flex:1;" onclick="toggleAsset('${a.ticker}', ${!a.active}); closeModal(event, true);">
-                            ${a.active ? 'Отключить торговлю' : 'Разрешить торговлю'}
-                        </button>
-                    </div>
-                </div>
-            `;
-            document.getElementById('modalSettings').innerHTML = settingsHtml;
+                `;
+                document.getElementById('modalSettings').innerHTML = settingsHtml;
 
-            // Default to 1 Month view
-            updateChartTimeframe(30);
+                // Default to 1 Month view
+                updateChartTimeframe(30);
+            }
 
             document.getElementById('modalOverlay').classList.add('active');
         }
