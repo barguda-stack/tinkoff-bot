@@ -56,8 +56,41 @@ async def get_status():
         "is_running": bot_instance.is_running,
         "last_scan_time": bot_instance.last_scan_time,
         "portfolio": bot_instance.portfolio_stats,
-        "assets": bot_instance.selected_assets
+        "assets": bot_instance.selected_assets,
+        "positions": bot_instance.active_positions
     }
+
+@app.post("/api/close_position")
+async def close_position(data: dict):
+    ticker = data.get("ticker")
+    # Find asset
+    asset = next((a for a in bot_instance.selected_assets if a["ticker"] == ticker), None)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Инструмент не найден")
+        
+    figi = asset["figi"]
+    if figi not in bot_instance.active_positions:
+        raise HTTPException(status_code=400, detail="Нет открытой позиции по данному инструменту")
+        
+    pos = bot_instance.active_positions[figi]
+    qty = pos['qty']
+    
+    # Try to sell
+    res = bot_instance.execute_trade(figi, ticker, "SELL", qty)
+    if res:
+        # Calculate profit
+        buy_price = pos['buy_price']
+        current_price = asset.get('current_price', buy_price) # Fallback to buy price if missing
+        profit = (current_price - buy_price) * qty * pos.get('lot', 1)
+        bot_instance.portfolio_stats['total_profit'] += profit
+        
+        # Remove position and disable asset
+        del bot_instance.active_positions[figi]
+        asset["active"] = False
+        
+        return {"status": "ok", "message": f"Позиция {ticker} закрыта. Инструмент деактивирован."}
+    else:
+        raise HTTPException(status_code=500, detail="Ошибка при выставлении ордера на продажу")
 
 @app.post("/api/update_asset")
 async def update_asset(data: dict):

@@ -113,6 +113,8 @@
             setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
         }
 
+        let globalPositions = {};
+
         async function fetchStatus() {
             try {
                 const res = await fetch('/api/status');
@@ -139,7 +141,7 @@
                 }
 
                 allAssetsData = data.assets;
-                renderAssets(data.assets);
+                renderAssets(data.assets, data.positions);
             } catch (e) {
                 console.error(e);
             }
@@ -147,7 +149,8 @@
 
         let activeCharts = {};
 
-        function renderAssets(assets) {
+        function renderAssets(assets, positions) {
+            globalPositions = positions || {};
             const container = document.getElementById('assetsContainer');
             if (!assets || assets.length === 0) {
                 container.innerHTML = '<p style="color: #666; font-style: italic;">Инициализация сканирования...</p>';
@@ -169,27 +172,28 @@
 
             sortedAssets.forEach(a => {
                 const isTooExpensive = a.lot_price > 500;
-                const isReady = a.status === "READY";
+                const isReadyStr = a.status === "ГОТОВ" || a.status === "READY";
+                const hasPosition = globalPositions[a.figi];
                 
                 const card = document.createElement('div');
                 card.className = 'asset-card';
                 
                 card.ondblclick = () => openFullscreen(a.ticker);
                 
-                if (isReady) {
+                if (isReadyStr) {
                     card.title = "Двойной клик для настроек и графиков";
                 } else {
                     card.style.opacity = '0.7';
                     card.title = "Двойной клик для просмотра статуса (идет тестирование)...";
                 }
                 
-                const isReadyStr = a.status === "ГОТОВ" || a.status === "READY"; // check both just in case
-
                 let statusHtml = '';
                 if (isReadyStr) {
+                    // Инвертированная индикация (Вкл = серая/красная, Выкл = зеленая)
                     const btnClass = a.active ? 'btn-red' : 'btn-green';
-                    const btnText = a.active ? 'Выкл' : 'Вкл';
-                    statusHtml = `<button class="btn ${btnClass}" style="padding: 2px 6px; font-size: 0.8em; z-index: 10;" onclick="event.stopPropagation(); toggleAsset('${a.ticker}', ${!a.active})">${btnText}</button>`;
+                    const btnText = a.active ? 'ВКЛ' : 'ВЫКЛ';
+                    const btnStyle = a.active ? 'background: #9E9E9E;' : 'background: #4CAF50;';
+                    statusHtml = `<button class="btn" style="${btnStyle} padding: 2px 6px; font-size: 0.8em; z-index: 10; color: white; border: none; border-radius: 3px; cursor: pointer;" onclick="event.stopPropagation(); toggleAsset('${a.ticker}', ${!a.active})">${btnText}</button>`;
                 } else {
                     statusHtml = `<span style="color: #FF9800; font-size: 0.8em;">${a.status}</span>`;
                 }
@@ -211,6 +215,21 @@
                     `;
                 }
                 
+                let positionHtml = '';
+                if (hasPosition) {
+                    const pos = globalPositions[a.figi];
+                    const currentPrice = a.current_price || pos.buy_price;
+                    const profit = (currentPrice - pos.buy_price) * pos.qty * pos.lot;
+                    const profitColor = profit >= 0 ? '#4CAF50' : '#f44336';
+                    positionHtml = `
+                        <div style="margin-top: 8px; padding: 5px; background: #e3f2fd; border-radius: 4px; font-size: 0.9em;">
+                            <p style="margin: 2px 0;">В работе: <strong>${pos.qty} лот.</strong></p>
+                            <p style="margin: 2px 0;">Прибыль: <strong style="color: ${profitColor}">${profit.toFixed(2)} ₽</strong></p>
+                            <button class="btn btn-red" style="width: 100%; padding: 4px; margin-top: 5px; font-size: 0.9em;" onclick="event.stopPropagation(); closePosition('${a.ticker}')">Закрыть позицию</button>
+                        </div>
+                    `;
+                }
+                
                 card.innerHTML = `
                     <div class="asset-header" style="align-items: center;">
                         <span>${a.ticker}</span>
@@ -218,6 +237,7 @@
                     </div>
                     <p style="font-size:0.8em; color:#666; margin-bottom:2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${a.name}</p>
                     ${contentHtml}
+                    ${positionHtml}
                 `;
                 container.appendChild(card);
                 
@@ -467,6 +487,26 @@
             } catch (e) {
                 console.error(e);
                 alert("Ошибка изменения статуса");
+            }
+        }
+
+        async function closePosition(ticker) {
+            if(!confirm(`Вы уверены, что хотите вручную закрыть позицию по ${ticker}? Актив будет продан по рыночной цене, а инструмент будет выключен.`)) return;
+            try {
+                const res = await fetch('/api/close_position', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ticker: ticker })
+                });
+                const data = await res.json();
+                if (res.status === 200) {
+                    showToast(data.message);
+                } else {
+                    alert("Ошибка: " + data.detail);
+                }
+                fetchStatus();
+            } catch (e) {
+                alert("Сетевая ошибка при закрытии позиции");
             }
         }
 
