@@ -132,7 +132,7 @@
         function renderAssets(assets) {
             const container = document.getElementById('assetsContainer');
             if (!assets || assets.length === 0) {
-                container.innerHTML = '<p>No assets selected yet. Awaiting next scan...</p>';
+                container.innerHTML = '<p style="color: #666; font-style: italic;">Scanning the market and downloading 1-year historical data for backtesting. This may take 5-10 minutes...</p>';
                 return;
             }
 
