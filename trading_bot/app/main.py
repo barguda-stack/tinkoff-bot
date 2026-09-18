@@ -122,6 +122,14 @@ async def manual_scan():
     threading.Thread(target=bot_instance._run_scan).start()
     return {"status": "ok", "message": "Премаркет запущен в фоне"}
 
+@app.post("/api/topup")
+async def topup_sandbox():
+    try:
+        bot_instance.client.top_up_sandbox(1000000) # 1 million rubles
+        return {"status": "ok", "message": "Счет Sandbox успешно пополнен на 1,000,000 RUB"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка пополнения: {str(e)}")
+
 @app.post("/api/update")
 async def update_bot():
     import subprocess

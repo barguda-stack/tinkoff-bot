@@ -56,6 +56,21 @@ class TinkoffService:
                 return accounts[0]["id"]
         return ""
 
+    def top_up_sandbox(self, amount: int = 100000):
+        if not self.sandbox:
+            return False
+        if not self.account_id:
+            self.account_id = self.get_accounts()
+        payload = {
+            "accountId": self.account_id,
+            "amount": {
+                "currency": "rub",
+                "units": str(amount),
+                "nano": 0
+            }
+        }
+        return self._post("tinkoff.public.invest.api.contract.v1.SandboxService/SandboxPayIn", payload)
+
     def get_shares(self) -> List[dict]:
         data = self._post("tinkoff.public.invest.api.contract.v1.InstrumentsService/Shares", {"instrumentStatus": "INSTRUMENT_STATUS_BASE"})
         return data.get("instruments", [])
