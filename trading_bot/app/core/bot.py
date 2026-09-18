@@ -29,45 +29,46 @@ class TradingBot:
     def fetch_commission_rate(self):
         try:
             self.commission_rate = 0.003
-            print(f"Set commission rate to {self.commission_rate * 100}%")
+            print(f"Установлена комиссия брокера: {self.commission_rate * 100}%")
         except Exception as e:
-            print(f"Error fetching commission: {e}")
+            print(f"Ошибка получения комиссии: {e}")
 
     def start(self):
         self.fetch_commission_rate()
         # Initialize Sandbox account and fetch balance
         try:
             acc_id = self.client.get_accounts()
-            print(f"Connected to account: {acc_id}")
+            print(f"Успешное подключение к Sandbox счету: {acc_id}")
         except Exception as e:
-            print(f"Could not init account: {e}")
+            print(f"Не удалось инициализировать счет: {e}")
             
         self.is_running = True
-        print("Bot started.")
+        print("Бот запущен.")
         threading.Thread(target=self._run_scan).start()
 
     def stop(self):
         self.is_running = False
-        print("Bot stopped.")
+        print("Бот остановлен.")
 
     def _run_scan(self):
         if not self.is_running:
             return
             
-        print("Starting market scan to find candidate assets...")
+        print("Начинаю сканирование рынка для поиска активов...")
         try:
             self.selected_assets = self.scanner.scan_and_select_top_assets(max_assets=10, max_lot_price=500.0)
             self.last_scan_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"Found {len(self.selected_assets)} initial candidates. Starting background backtesting...")
+            print(f"Найдено {len(self.selected_assets)} подходящих активов. Запускаю фоновое тестирование...")
             
             # Start background backtesting for each asset
             threading.Thread(target=self._background_backtest, daemon=True).start()
             
         except Exception as e:
-            print(f"Scan failed: {e}")
+            print(f"Ошибка сканирования: {e}")
 
     def _background_backtest(self):
         from app.services.backtester import Backtester
+        import math
         
         now = datetime.datetime.utcnow()
         one_year_ago = now - datetime.timedelta(days=365)
@@ -76,18 +77,18 @@ class TradingBot:
             if not self.is_running:
                 break
                 
-            asset["status"] = "DOWNLOADING"
-            print(f"[{asset['ticker']}] Status: DOWNLOADING (Fetching 1 year of history)...")
+            asset["status"] = "ЗАГРУЗКА"
+            print(f"[{asset['ticker']}] Статус: ЗАГРУЗКА (Скачивание истории за год)...")
             
             try:
                 df = self.client.get_historical_candles(asset['figi'], one_year_ago, now)
                 
                 if df.empty:
-                    asset["status"] = "ERROR: No data"
+                    asset["status"] = "ОШИБКА (Нет данных)"
                     continue
                 
-                asset["status"] = "BACKTESTING"
-                print(f"[{asset['ticker']}] Status: BACKTESTING...")
+                asset["status"] = "ТЕСТИРОВАНИЕ"
+                print(f"[{asset['ticker']}] Статус: ТЕСТИРОВАНИЕ...")
                 
                 current_price = df['close'].iloc[-1]
                 lot_price = current_price * asset['lot']
@@ -99,29 +100,44 @@ class TradingBot:
                 asset["lot_price"] = lot_price
                 asset["best_strategy"] = best_strat['name']
                 asset["expected_return"] = best_strat['return']
-                asset["sparkline"] = df['close'].tail(50).tolist()
+                
+                # Format chart data for Chart.js (Time series up to ~8000 candles for 1 month timeframe equivalent)
+                df_chart = df.tail(8000)
+                chart_data = []
+                for idx, row in df_chart.iterrows():
+                    # Handle NaNs
+                    close_val = row['close']
+                    if math.isnan(close_val):
+                        close_val = 0
+                    chart_data.append({
+                        "x": idx.isoformat() + "Z",
+                        "y": close_val
+                    })
+                
+                asset["chart_data"] = chart_data
+                asset["sparkline"] = [] # Legacy compatibility
                 
                 is_active = True
                 if lot_price > 500.0:
                     is_active = False
                 
                 asset["active"] = is_active
-                asset["status"] = "READY"
-                print(f"[{asset['ticker']}] Status: READY. Strategy: {best_strat['name']}")
+                asset["status"] = "ГОТОВ"
+                print(f"[{asset['ticker']}] Статус: ГОТОВ. Лучшая стратегия: {best_strat['name']}")
                 
             except Exception as e:
-                asset["status"] = "ERROR"
-                print(f"[{asset['ticker']}] Failed during backtest: {e}")
+                asset["status"] = "ОШИБКА"
+                print(f"[{asset['ticker']}] Ошибка во время тестирования: {e}")
                 
-        print("Background backtesting complete for all assets.")
+        print("Фоновое тестирование всех активов завершено.")
 
     def execute_trade(self, figi: str, ticker: str, direction: str, quantity: int):
         try:
             res = self.client.place_market_order(figi, quantity, direction)
-            print(f"Successfully executed {direction} for {quantity} lots of {ticker}. OrderID: {res.get('orderId')}")
+            print(f"Успешно выполнен ордер {direction} на {quantity} лотов для {ticker}. OrderID: {res.get('orderId')}")
             return res
         except Exception as e:
-            print(f"Failed to execute trade for {ticker}: {e}")
+            print(f"Ошибка при выполнении ордера для {ticker}: {e}")
             return None
 
 bot_instance = TradingBot()

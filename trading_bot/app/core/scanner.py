@@ -9,11 +9,11 @@ class MarketScanner:
         self.client = TinkoffService(token=token, sandbox=True)
         
     def scan_and_select_top_assets(self, max_assets: int = 20, max_lot_price: float = 500.0) -> list:
-        print("Fetching all shares...")
+        print("Загрузка списка всех акций...")
         try:
             shares = self.client.get_shares()
         except Exception as e:
-            print(f"Error fetching shares: {e}")
+            print(f"Ошибка получения акций: {e}")
             return []
             
         filtered_shares = []
@@ -22,7 +22,7 @@ class MarketScanner:
                 continue
             filtered_shares.append(s)
             
-        print(f"Found {len(filtered_shares)} RUB shares. Returning initial list for background processing.")
+        print(f"Найдено {len(filtered_shares)} рублевых акций. Возвращаю первоначальный список для фоновой загрузки.")
         
         results = []
         for share in filtered_shares[:10]: 

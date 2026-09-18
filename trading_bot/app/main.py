@@ -65,15 +65,15 @@ async def update_asset(data: dict):
     for asset in bot_instance.selected_assets:
         if asset["ticker"] == ticker:
             if "active" in data:
-                if data["active"] and asset.get("status") != "READY":
-                    raise HTTPException(status_code=400, detail="Cannot activate asset before backtesting is READY")
+                if data["active"] and asset.get("status") != "ГОТОВ":
+                    raise HTTPException(status_code=400, detail="Невозможно активировать инструмент до завершения загрузки и тестирования")
                 asset["active"] = data["active"]
             if "max_lots" in data:
                 asset["max_lots"] = data["max_lots"]
             if "max_trades" in data:
                 asset["max_trades"] = data["max_trades"]
             return {"status": "updated", "asset": asset}
-    raise HTTPException(status_code=404, detail="Asset not found")
+    raise HTTPException(status_code=404, detail="Инструмент не найден")
 
 @app.post("/api/toggle_bot")
 async def toggle_bot():
@@ -89,13 +89,12 @@ async def update_bot():
     import os
     try:
         if os.name == 'nt':
-            # Run the update script in a new detached cmd window so the current process can be killed
             subprocess.Popen('start "" update.bat', shell=True)
-            return {"status": "ok", "message": "Update started! The bot will now restart automatically. Please wait 10-15 seconds and refresh the page."}
+            return {"status": "ok", "message": "Обновление запущено! Бот перезагрузится автоматически. Страница обновится через 10 секунд."}
         else:
             subprocess.check_call(["git", "fetch", "origin"])
             subprocess.check_call(["git", "reset", "--hard", "origin/master"])
-            return {"status": "ok", "message": "Update downloaded successfully. Please restart manually."}
+            return {"status": "ok", "message": "Обновление загружено. Пожалуйста, перезапустите бота вручную."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

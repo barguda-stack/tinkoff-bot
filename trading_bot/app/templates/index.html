@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Tinkoff Trading Bot</title>
+    <title>Торговый бот Tinkoff</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Add date adapter for time scale -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f0f2f5; }
         .container { max-width: 1200px; margin: auto; }
@@ -31,52 +33,61 @@
         .modal-overlay.active { display: flex; }
         .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto; position: relative; }
         .close-modal { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: #666; }
-        .modal-chart-container { width: 100%; height: 300px; margin: 20px 0; }
+        .modal-chart-container { width: 100%; height: 300px; margin: 10px 0 20px 0; }
+        .time-filters { display: flex; gap: 10px; margin-bottom: 10px; }
+        .time-filter-btn { padding: 5px 10px; cursor: pointer; border: 1px solid #ccc; background: #fff; border-radius: 4px; font-size: 0.9em; }
+        .time-filter-btn.active { background: #2196F3; color: white; border-color: #2196F3; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>Tinkoff Trading Bot (Sandbox)</h1>
+            <h1>Торговый бот Tinkoff (Песочница)</h1>
             <div>
-                <button class="btn btn-blue" style="background:#607D8B;" onclick="updateBotCode()">Update Bot (GitHub)</button>
-                <button id="toggleBtn" class="btn btn-green" onclick="toggleBot()">Start Bot</button>
-                <button class="btn btn-blue" onclick="window.location.reload()">Refresh UI</button>
+                <button class="btn btn-blue" style="background:#607D8B;" onclick="updateBotCode()">Обновить код (GitHub)</button>
+                <button id="toggleBtn" class="btn btn-green" onclick="toggleBot()">Запустить бота</button>
+                <button class="btn btn-blue" onclick="window.location.reload()">Обновить страницу</button>
             </div>
         </div>
 
         <div class="card stats">
             <div class="stat-box">
-                <h3>Balance</h3>
+                <h3>Баланс</h3>
                 <p id="balance">0.00 RUB</p>
             </div>
             <div class="stat-box">
-                <h3>Total Profit</h3>
+                <h3>Общая прибыль</h3>
                 <p id="profit">0.00 RUB</p>
             </div>
             <div class="stat-box">
-                <h3>Status</h3>
-                <p id="statusText">Stopped</p>
+                <h3>Статус</h3>
+                <p id="statusText">Остановлен</p>
             </div>
             <div class="stat-box">
-                <h3>Last Scan</h3>
+                <h3>Последнее сканирование</h3>
                 <p id="lastScan">-</p>
             </div>
         </div>
 
-        <h2>Active Assets & Strategies</h2>
+        <h2>Активные инструменты и стратегии</h2>
         <div class="asset-grid" id="assetsContainer">
-            <p>Loading assets...</p>
+            <p>Загрузка...</p>
         </div>
     </div>
     
-    <div id="toast" class="toast">Changes Saved!</div>
+    <div id="toast" class="toast">Настройки сохранены!</div>
     
     <!-- Modal -->
     <div id="modalOverlay" class="modal-overlay" onclick="closeModal(event)">
         <div class="modal-content" onclick="event.stopPropagation()">
             <span class="close-modal" onclick="closeModal(event, true)">&times;</span>
-            <h2 id="modalTitle">Asset Details</h2>
+            <h2 id="modalTitle">Детали актива</h2>
+            <div class="time-filters" id="timeFilters">
+                <button class="time-filter-btn" onclick="updateChartTimeframe(1)">1 Д</button>
+                <button class="time-filter-btn" onclick="updateChartTimeframe(3)">3 Д</button>
+                <button class="time-filter-btn" onclick="updateChartTimeframe(7)">1 Н</button>
+                <button class="time-filter-btn active" onclick="updateChartTimeframe(30)">1 М</button>
+            </div>
             <div class="modal-chart-container">
                 <canvas id="modalChart"></canvas>
             </div>
@@ -111,13 +122,13 @@
                 const btn = document.getElementById('toggleBtn');
                 const statusText = document.getElementById('statusText');
                 if (data.is_running) {
-                    btn.innerText = 'Stop Bot';
+                    btn.innerText = 'Остановить бота';
                     btn.className = 'btn btn-red';
-                    statusText.innerText = 'Running';
+                    statusText.innerText = 'Запущен';
                 } else {
-                    btn.innerText = 'Start Bot';
+                    btn.innerText = 'Запустить бота';
                     btn.className = 'btn btn-green';
-                    statusText.innerText = 'Stopped';
+                    statusText.innerText = 'Остановлен';
                 }
 
                 allAssetsData = data.assets;
@@ -132,7 +143,7 @@
         function renderAssets(assets) {
             const container = document.getElementById('assetsContainer');
             if (!assets || assets.length === 0) {
-                container.innerHTML = '<p style="color: #666; font-style: italic;">Initializing scan...</p>';
+                container.innerHTML = '<p style="color: #666; font-style: italic;">Инициализация сканирования...</p>';
                 return;
             }
 
@@ -151,15 +162,15 @@
                 
                 if (isReady) {
                     card.ondblclick = () => openFullscreen(a.ticker);
-                    card.title = "Double-click to open details and settings";
+                    card.title = "Двойной клик для настроек и графиков";
                 } else {
                     card.style.opacity = '0.7';
-                    card.title = "Waiting for backtesting to finish...";
+                    card.title = "Ожидание завершения тестирования...";
                 }
                 
                 let statusHtml = '';
                 if (isReady) {
-                    statusHtml = `<span style="color: ${isTooExpensive && !a.active ? 'red' : 'green'}">${a.active ? 'ON' : 'OFF'}</span>`;
+                    statusHtml = `<span style="color: ${isTooExpensive && !a.active ? 'red' : 'green'}">${a.active ? 'ВКЛ' : 'ВЫКЛ'}</span>`;
                 } else {
                     statusHtml = `<span style="color: #FF9800; font-size: 0.8em;">${a.status}</span>`;
                 }
@@ -170,14 +181,14 @@
                         <div class="chart-container">
                             <canvas id="chart_${a.ticker}"></canvas>
                         </div>
-                        <p style="margin:2px 0;"><strong>Price:</strong> ${a.lot_price.toFixed(2)} RUB</p>
+                        <p style="margin:2px 0;"><strong>Цена лота:</strong> ${a.lot_price.toFixed(2)} ₽</p>
                     `;
                 } else {
                     contentHtml = `
                         <div style="height: 60px; display: flex; align-items: center; justify-content: center; margin-top: 5px; margin-bottom: 5px; background: #f5f5f5; border-radius: 4px;">
-                            <span style="color: #888; font-size: 0.8em; text-align: center;">Downloading history<br>& optimizing strategy...</span>
+                            <span style="color: #888; font-size: 0.8em; text-align: center;">Скачивание истории<br>& тест стратегии...</span>
                         </div>
-                        <p style="margin:2px 0; color: #888;"><strong>Price:</strong> --- RUB</p>
+                        <p style="margin:2px 0; color: #888;"><strong>Цена лота:</strong> --- ₽</p>
                     `;
                 }
                 
@@ -191,21 +202,23 @@
                 `;
                 container.appendChild(card);
                 
-                // Draw chart if data exists and is ready
-                if(isReady && a.sparkline && a.sparkline.length > 0) {
+                // Draw mini chart if data exists and is ready
+                if(isReady && a.chart_data && a.chart_data.length > 0) {
                     const ctx = document.getElementById(`chart_${a.ticker}`).getContext('2d');
-                    const isUp = a.sparkline[0] <= a.sparkline[a.sparkline.length-1];
+                    // Get last 50 points for mini chart
+                    const sparkData = a.chart_data.slice(-50).map(d => d.y);
+                    const isUp = sparkData[0] <= sparkData[sparkData.length-1];
                     const chartColor = isUp ? '#4CAF50' : '#f44336';
                     const gradient = ctx.createLinearGradient(0, 0, 0, 100);
-                    gradient.addColorStop(0, chartColor + '40'); // Add transparency
+                    gradient.addColorStop(0, chartColor + '40'); 
                     gradient.addColorStop(1, chartColor + '00');
                     
                     activeCharts[a.ticker] = new Chart(ctx, {
                         type: 'line',
                         data: {
-                            labels: a.sparkline.map((_, i) => i),
+                            labels: sparkData.map((_, i) => i),
                             datasets: [{
-                                data: a.sparkline,
+                                data: sparkData,
                                 borderColor: chartColor,
                                 backgroundColor: gradient,
                                 borderWidth: 2,
@@ -220,7 +233,7 @@
                             plugins: { legend: { display: false }, tooltip: { enabled: false } },
                             scales: {
                                 x: { display: false },
-                                y: { display: false, min: Math.min(...a.sparkline)*0.999, max: Math.max(...a.sparkline)*1.001 }
+                                y: { display: false, min: Math.min(...sparkData)*0.999, max: Math.max(...sparkData)*1.001 }
                             },
                             animation: { duration: 0 }
                         }
@@ -229,7 +242,10 @@
             });
         }
 
+        let currentModalTicker = null;
+
         function openFullscreen(ticker) {
+            currentModalTicker = ticker;
             const a = allAssetsData.find(x => x.ticker === ticker);
             if(!a) return;
 
@@ -237,65 +253,105 @@
             
             const settingsHtml = `
                 <div style="background: #f9f9f9; padding: 15px; border-radius: 8px;">
-                    <p><strong>Lot Price:</strong> ${a.lot_price.toFixed(2)} RUB (Lot size: ${a.lot})</p>
-                    <p><strong>Strategy:</strong> ${a.best_strategy}</p>
-                    <p><strong>Expected Return:</strong> ${(a.expected_return * 100).toFixed(2)}%</p>
+                    <p><strong>Цена лота:</strong> ${a.lot_price.toFixed(2)} ₽ (В лоте: ${a.lot} шт)</p>
+                    <p><strong>Выбранная стратегия:</strong> ${a.best_strategy}</p>
+                    <p><strong>Ожидаемая доходность (за год):</strong> ${(a.expected_return * 100).toFixed(2)}%</p>
                     <hr style="border:0; border-top:1px solid #ddd; margin: 15px 0;">
                     
                     <div class="form-group">
-                        <label>Max lots per trade:</label>
+                        <label>Макс. лотов на 1 сделку:</label>
                         <input type="number" id="max_lots_${a.ticker}" value="${a.max_lots || 1}" min="1">
                     </div>
                     <div class="form-group">
-                        <label>Max parallel trades:</label>
+                        <label>Макс. параллельных сделок:</label>
                         <input type="number" id="max_trades_${a.ticker}" value="${a.max_trades || 1}" min="1">
                     </div>
                     
                     <div style="margin-top:15px; display:flex; gap:10px;">
-                        <button class="btn btn-blue" style="flex:1;" onclick="saveSettings('${a.ticker}')">Save Settings</button>
+                        <button class="btn btn-blue" style="flex:1;" onclick="saveSettings('${a.ticker}')">Сохранить настройки</button>
                         <button class="btn ${a.active ? 'btn-red' : 'btn-green'}" style="flex:1;" onclick="toggleAsset('${a.ticker}', ${!a.active}); closeModal(event, true);">
-                            ${a.active ? 'Disable Asset' : 'Enable Asset'}
+                            ${a.active ? 'Отключить торговлю' : 'Разрешить торговлю'}
                         </button>
                     </div>
                 </div>
             `;
             document.getElementById('modalSettings').innerHTML = settingsHtml;
 
-            // Draw large chart
+            // Default to 1 Month view
+            updateChartTimeframe(30);
+
+            document.getElementById('modalOverlay').classList.add('active');
+        }
+
+        function updateChartTimeframe(days) {
+            // Update button styles
+            document.querySelectorAll('.time-filter-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            if(!currentModalTicker) return;
+            const a = allAssetsData.find(x => x.ticker === currentModalTicker);
+            if(!a || !a.chart_data || a.chart_data.length === 0) return;
+
+            // 5 min candles: 12 per hour * 24 = 288 per day.
+            const candlesNeeded = days * 288;
+            const chartData = a.chart_data.slice(-candlesNeeded);
+
             if(modalChartInstance) modalChartInstance.destroy();
             const ctx = document.getElementById('modalChart').getContext('2d');
             
-            if(a.sparkline && a.sparkline.length > 0) {
-                const isUp = a.sparkline[0] <= a.sparkline[a.sparkline.length-1];
-                const chartColor = isUp ? '#4CAF50' : '#f44336';
-                const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-                gradient.addColorStop(0, chartColor + '60');
-                gradient.addColorStop(1, chartColor + '00');
+            const isUp = chartData[0].y <= chartData[chartData.length-1].y;
+            const chartColor = isUp ? '#4CAF50' : '#f44336';
+            const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+            gradient.addColorStop(0, chartColor + '60');
+            gradient.addColorStop(1, chartColor + '00');
 
-                modalChartInstance = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: a.sparkline.map((_, i) => '-' + (a.sparkline.length - i) * 5 + 'm'),
-                        datasets: [{
-                            label: 'Price (RUB)',
-                            data: a.sparkline,
-                            borderColor: chartColor,
-                            backgroundColor: gradient,
-                            borderWidth: 2,
-                            fill: true,
-                            pointRadius: 2,
-                            tension: 0.2
-                        }]
+            modalChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Цена (₽)',
+                        data: chartData,
+                        borderColor: chartColor,
+                        backgroundColor: gradient,
+                        borderWidth: 1.5,
+                        fill: true,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
                     },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.parsed.y.toFixed(2) + ' ₽';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                tooltipFormat: 'dd.MM.yyyy HH:mm',
+                                displayFormats: {
+                                    hour: 'HH:mm',
+                                    day: 'dd MMM'
+                                }
+                            },
+                            ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }
+                        }
                     }
-                });
-            }
-
-            document.getElementById('modalOverlay').classList.add('active');
+                }
+            });
         }
 
         function closeModal(e, force = false) {
@@ -313,7 +369,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ticker: ticker, max_lots: parseInt(lots), max_trades: parseInt(trades) })
             });
-            showToast(`Settings saved for ${ticker}`);
+            showToast(`Настройки сохранены для ${ticker}`);
             fetchStatus();
         }
 
@@ -331,11 +387,11 @@
                     return;
                 }
                 
-                showToast(`${ticker} is now ${newState ? 'Active' : 'Disabled'}`);
+                showToast(`${ticker} теперь ${newState ? 'АКТИВЕН' : 'ОТКЛЮЧЕН'}`);
                 fetchStatus();
             } catch (e) {
                 console.error(e);
-                alert("Error toggling asset");
+                alert("Ошибка изменения статуса");
             }
         }
 
@@ -345,18 +401,18 @@
         }
 
         async function updateBotCode() {
-            if(confirm("Are you sure you want to pull the latest code from GitHub? The bot will update and restart automatically.")) {
+            if(confirm("Вы уверены, что хотите загрузить последнюю версию кода? Бот обновится и перезапустится автоматически.")) {
                 try {
                     const res = await fetch('/api/update', { method: 'POST' });
                     const data = await res.json();
                     if(data.status === "ok") {
                         alert(data.message);
-                        setTimeout(() => window.location.reload(), 10000); // Reload after 10 seconds
+                        setTimeout(() => window.location.reload(), 10000); 
                     } else {
-                        alert("Error: " + data.detail);
+                        alert("Ошибка: " + data.detail);
                     }
                 } catch(e) {
-                    alert("Update initiated. Reconnecting in 10 seconds...");
+                    alert("Обновление началось. Переподключение через 10 секунд...");
                     setTimeout(() => window.location.reload(), 10000);
                 }
             }

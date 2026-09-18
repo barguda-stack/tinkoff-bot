@@ -29,10 +29,10 @@ class TinkoffService:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.SSLError as e:
-            print(f"[{endpoint}] SSL Error: Your VPN, Antivirus, or network proxy is blocking the connection to Tinkoff API. Try disabling VPN or Kaspersky/DrWeb Web Shield.")
+            print(f"[{endpoint}] Ошибка SSL: Ваш VPN, Антивирус или прокси блокирует соединение с Tinkoff API. Отключите VPN или Веб-экран Касперского.")
             raise e
         except Exception as e:
-            print(f"[{endpoint}] Request failed: {e}")
+            print(f"[{endpoint}] Ошибка запроса: {e}")
             raise e
 
     def get_accounts(self) -> str:
@@ -78,14 +78,14 @@ class TinkoffService:
                     if last_cached_time > fetch_from:
                         fetch_from = last_cached_time + timedelta(minutes=5)
             except Exception as e:
-                print(f"Cache read error for {figi}: {e}")
+                print(f"Ошибка чтения кэша для {figi}: {e}")
                 df_cached = pd.DataFrame()
 
         all_candles = []
         current_time = fetch_from
         
         if current_time < to_time:
-            print(f"[{figi}] Fetching new history from {current_time.strftime('%Y-%m-%d')} to {to_time.strftime('%Y-%m-%d')}...")
+            print(f"[{figi}] Скачивание новой истории с {current_time.strftime('%Y-%m-%d')} по {to_time.strftime('%Y-%m-%d')}...")
             while current_time < to_time:
                 next_time = current_time + timedelta(days=1)
                 if next_time > to_time:
@@ -104,10 +104,10 @@ class TinkoffService:
                     if candles:
                         all_candles.extend(candles)
                 except Exception as e:
-                    print(f"Error fetching candles for {figi} from {current_time} to {next_time}: {e}")
+                    print(f"Ошибка скачивания свечей для {figi} с {current_time} по {next_time}: {e}")
                     
                 current_time = next_time
-                time.sleep(0.15) # Rate limit protection
+                time.sleep(0.15)
 
         df_new = pd.DataFrame()
         if all_candles:
@@ -134,7 +134,7 @@ class TinkoffService:
             try:
                 df_final.to_csv(cache_file)
             except Exception as e:
-                print(f"Cache write error for {figi}: {e}")
+                print(f"Ошибка записи кэша для {figi}: {e}")
                 
         return df_final
 
