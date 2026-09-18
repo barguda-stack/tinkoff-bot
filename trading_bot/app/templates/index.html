@@ -189,10 +189,8 @@
                 
                 let statusHtml = '';
                 if (isReadyStr) {
-                    // Инвертированная индикация (Вкл = серая/красная, Выкл = зеленая)
-                    const btnClass = a.active ? 'btn-red' : 'btn-green';
                     const btnText = a.active ? 'ВКЛ' : 'ВЫКЛ';
-                    const btnStyle = a.active ? 'background: #9E9E9E;' : 'background: #4CAF50;';
+                    const btnStyle = a.active ? 'background: #4CAF50;' : 'background: #f44336;';
                     statusHtml = `<button class="btn" style="${btnStyle} padding: 2px 6px; font-size: 0.8em; z-index: 10; color: white; border: none; border-radius: 3px; cursor: pointer;" onclick="event.stopPropagation(); toggleAsset('${a.ticker}', ${!a.active})">${btnText}</button>`;
                 } else {
                     statusHtml = `<span style="color: #FF9800; font-size: 0.8em;">${a.status}</span>`;
